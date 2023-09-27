@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-remote_theme: pages-themes/cayman@v0.2.0
-plugins:
-- jekyll-remote-theme # add this line to the plugins list if you already have one
-=======
 # Hexo Configuration
 ## Docs: https://hexo.io/docs/configuration.html
 ## Source: https://github.com/hexojs/hexo/
@@ -110,4 +105,3 @@ deploy:
   type: git
   repository: git@github.com:silence-forest-sf/silence-forest-sf.github.io.git
   branch: master
->>>>>>> ed3990a24ca7fed38ad9cefebe526185a7527a6a
