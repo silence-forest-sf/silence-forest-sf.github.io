@@ -108,6 +108,113 @@
       </tags>
   </entry>
   <entry>
+    <title>记MapnaCTF2024的两题PLC流量</title>
+    <url>/2024/01/23/%E8%AE%B0MapnaCTF2024%E7%9A%84%E4%B8%A4%E9%A2%98PLC%E6%B5%81%E9%87%8F/</url>
+    <content><![CDATA[<p>这是一篇赛后复现的文章，做题的时候犯了一些错误，仅作记录警醒自己。</p>
+<h1 id="Forensics-PLC-I"><a href="#Forensics-PLC-I" class="headerlink" title="Forensics&#x2F;PLC I"></a>Forensics&#x2F;PLC I</h1><blockquote>
+<p>The MAPNA CERT team has identified an intrusion into the plant’s PLCs, discovering a covert message transferred to the PLC. Can you uncover this secret message?<br>MAPNA CERT 团队发现了对工厂 PLC 的入侵，发现了传输到 PLC 的秘密消息。你能揭开这个秘密信息吗？</p>
+<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
+</blockquote>
+<p>随手翻就能看到一些奇怪的，连续的，可读的字符串。</p>
+<p>掏出神奇的string,你会得到：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&gt;&gt;&gt;strings plc.pcap              </span><br><span class="line">4-&quot;@</span><br><span class="line">(-#@</span><br><span class="line">&gt;-$@</span><br><span class="line">A-%@</span><br><span class="line">/-&amp;@</span><br><span class="line">I-&#x27;@</span><br><span class="line">/-(@</span><br><span class="line">I-)@</span><br><span class="line">/-*@</span><br><span class="line">I-+@</span><br><span class="line">/-,@</span><br><span class="line">I--@</span><br><span class="line">3:Ld_4lW4 &lt;---</span><br><span class="line">6ES7 151-8AB01-0AB0 </span><br><span class="line">/-.@</span><br><span class="line">E-/@</span><br><span class="line">/-0@</span><br><span class="line">I-1@</span><br><span class="line">/-2@</span><br><span class="line">I-3@</span><br><span class="line">IM151-8 PN/DP CPU</span><br><span class="line">/-4@</span><br><span class="line">5:3__PaAD	&lt;---</span><br><span class="line">E-5@</span><br><span class="line">/-6@</span><br><span class="line">1:MAPNA&#123;y    &lt;---</span><br><span class="line">E-7@</span><br><span class="line">/-8@</span><br><span class="line">4:yS__CaR	&lt;---</span><br><span class="line">O-9@</span><br><span class="line"> #      !</span><br><span class="line">/-:@</span><br><span class="line">E-;@</span><br><span class="line">/-&lt;@</span><br><span class="line">6:d1n9!!&#125;	&lt;---</span><br><span class="line">E-=@</span><br><span class="line">Y3td</span><br><span class="line">/-&gt;@</span><br><span class="line">2:0U_sHOu 	&lt;---</span><br><span class="line">(-?@</span><br></pre></td></tr></table></figure>
+
+<p>善良的出题人还告诉了我们顺序！所以flag是<code>MAPNA&#123;y0U_sHOuLd_4lW4yS__CaR3__PaADd1n9!!&#125;</code></p>
+<h1 id="Forensics-PLC-Ⅱ"><a href="#Forensics-PLC-Ⅱ" class="headerlink" title="Forensics&#x2F;PLC Ⅱ"></a>Forensics&#x2F;PLC Ⅱ</h1><blockquote>
+<p>After extensive investigations, the MAPNA forensics team discovered that the attackers attempted to manipulate the PLC time. Please identify the precise time in the following format: year:month:day:hour:minute:second:millisecond. The flag is MAPNA{sha256(datetime)}.<br>经过广泛的调查，MACNA取证团队发现攻击者试图操纵PLC时间。请按以下格式标识精确时间：年：月：日：小时：分钟：秒：毫秒。标志为 MAPNA{sha256（datetime）}。</p>
+<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
+</blockquote>
+<p>拿到流量包发现全部都是TCP流量，显然应该就提取data数据，然后分析具体是什么协议了。</p>
+<p>题目的名字的为PLC，这意味着这是一道工控设备的流量题，通过第29条流量我们甚至可以直接发现设备的型号为：IM151-8 PN&#x2F;DP CPU，这是西门子旗下的一款设备。</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123104911593.png" alt="image-20240123104911593"></p>
+<p>循着这个思路下去就是分析这款设备如何修改时间，这里我走进了一个误区，去翻阅了这款cpu的<a href="https://cache.industry.siemens.com/dl/files/312/47409312/att_78878/v1/et200s_im151_8_pn_dp_cpu_operating_instructions_zh-CHS_zh-CHS.pdf">手册</a>找到了它”使用 PROFINET 进行时间同步”。仔细研究profinet这个协议之后我卡住了，因为它和TCP没有毛关系。</p>
+<p>事实上这个是相对底层的东西，不是很重要。（这里我也问了LLM，它也把我往这方面去引导了T^T）我们需要知道的是：</p>
+<ol>
+<li><strong>IM151-8是什么</strong>：西门子工业自动化领域的产品系列之一，属于西门子的S7-1500系列。</li>
+<li><strong>怎么使用它</strong>：STEP 7是用于编程、配置和维护SIMATIC S7控制器的软件工具。</li>
+<li><strong>工控软件的协议是什么</strong>：S7 协议是 SIEMENS S7系列产品之间通讯使用的标准协议</li>
+</ol>
+<p>因此S7协议才是这里的流量真正归属的协议。</p>
+<p>再介绍一下，来自sealldev的智慧，在他们的wp中他们截取了tcp.data起始部分<code>03000016</code>使用github的code search功能找到了相关的脚本，进而确定了协议</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/search_result_on_github0123.png" alt="image-20240123112840406"></p>
+<p>wireshark wiki在<a href="https://wiki.wireshark.org/S7comm">S7comm</a>中提到了<a href="https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_reading_setting_plc_time.pcap">设置时间的例子</a></p>
+<p>在示例中我们可以找到设置时间（set time）的43号流量，并且关注到表示设置时间的特征数值：<code>4702</code>（如图所示，4代表请求，7代表时间函数，02代表设置时间的子函数）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123122837950.png" alt="image-20240123122837950"></p>
+<p>因此我们在题目附件plc.pcap的分组字节流中进行十六进制值的搜索即可。</p>
+<p>以下是我的搜索结果：</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123123238801.png" alt="image-20240123123238801"></p>
+<p>时间戳就是<code>00202309211959599490</code>，解析结果是<code>2023:09:21:19:59:29:949</code>，依照题目要求进行sha256即可。</p>
+<h1 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h1><h2 id="S7-Timestamp"><a href="#S7-Timestamp" class="headerlink" title="S7 Timestamp"></a>S7 Timestamp</h2><p>以题目PLCⅡ中的<code>00202309211959599490</code>为例进行解析</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>含义</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0x00</td>
+<td>保留，一般为0x00</td>
+<td>00</td>
+</tr>
+<tr>
+<td>0x01</td>
+<td>年1</td>
+<td>20</td>
+</tr>
+<tr>
+<td>0x02</td>
+<td>年2</td>
+<td>23</td>
+</tr>
+<tr>
+<td>0x03</td>
+<td>月</td>
+<td>09</td>
+</tr>
+<tr>
+<td>0x04</td>
+<td>日</td>
+<td>21</td>
+</tr>
+<tr>
+<td>0x05</td>
+<td>时</td>
+<td>19</td>
+</tr>
+<tr>
+<td>0x06</td>
+<td>分</td>
+<td>59</td>
+</tr>
+<tr>
+<td>0x07</td>
+<td>秒</td>
+<td>59</td>
+</tr>
+<tr>
+<td>0x08~0x0a</td>
+<td>毫秒（逆序）</td>
+<td>0949</td>
+</tr>
+</tbody></table>
+<h2 id="相关阅读"><a href="#相关阅读" class="headerlink" title="相关阅读"></a>相关阅读</h2><ul>
+<li><a href="https://ctf.krauq.com/mapna-ctf-2024">krauq’s wp</a></li>
+<li><a href="https://seall.dev/posts/mapnactf2024#forensicsplc-ii--11-solves">seall’s wp</a></li>
+<li><a href="https://wiki.wireshark.org/S7comm">wirshark wiki-S7comm</a></li>
+</ul>
+<h2 id="小反思"><a href="#小反思" class="headerlink" title="小反思"></a>小反思</h2><ol>
+<li>对流量的特征进行搜索，最简单的方式就是截取数据头部</li>
+<li>别太相信LLM，他们鬼话太多了。</li>
+<li>匍匐在伟大的github code search之下吧！</li>
+</ol>
+]]></content>
+      <tags>
+        <tag>PLC,流量分析</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>逆向任务下大模型的简单对比</title>
     <url>/2024/01/05/%E9%80%86%E5%90%91%E4%BB%BB%E5%8A%A1%E4%B8%8B%E5%A4%A7%E6%A8%A1%E5%9E%8B%E7%9A%84%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94/</url>
     <content><![CDATA[<blockquote>
