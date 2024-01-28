@@ -1,6 +1,375 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>记MapnaCTF2024的两题PLC流量</title>
+    <url>/2024/01/23/%E8%AE%B0MapnaCTF2024%E7%9A%84%E4%B8%A4%E9%A2%98PLC%E6%B5%81%E9%87%8F/</url>
+    <content><![CDATA[<p>这是一篇赛后复现的文章，做题的时候犯了一些错误，仅作记录警醒自己。</p>
+<h1 id="Forensics-PLC-I"><a href="#Forensics-PLC-I" class="headerlink" title="Forensics&#x2F;PLC I"></a>Forensics&#x2F;PLC I</h1><blockquote>
+<p>The MAPNA CERT team has identified an intrusion into the plant’s PLCs, discovering a covert message transferred to the PLC. Can you uncover this secret message?<br>MAPNA CERT 团队发现了对工厂 PLC 的入侵，发现了传输到 PLC 的秘密消息。你能揭开这个秘密信息吗？</p>
+<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
+</blockquote>
+<p>随手翻就能看到一些奇怪的，连续的，可读的字符串。</p>
+<p>掏出神奇的string,你会得到：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&gt;&gt;&gt;strings plc.pcap              </span><br><span class="line">4-&quot;@</span><br><span class="line">(-#@</span><br><span class="line">&gt;-$@</span><br><span class="line">A-%@</span><br><span class="line">/-&amp;@</span><br><span class="line">I-&#x27;@</span><br><span class="line">/-(@</span><br><span class="line">I-)@</span><br><span class="line">/-*@</span><br><span class="line">I-+@</span><br><span class="line">/-,@</span><br><span class="line">I--@</span><br><span class="line">3:Ld_4lW4 &lt;---</span><br><span class="line">6ES7 151-8AB01-0AB0 </span><br><span class="line">/-.@</span><br><span class="line">E-/@</span><br><span class="line">/-0@</span><br><span class="line">I-1@</span><br><span class="line">/-2@</span><br><span class="line">I-3@</span><br><span class="line">IM151-8 PN/DP CPU</span><br><span class="line">/-4@</span><br><span class="line">5:3__PaAD	&lt;---</span><br><span class="line">E-5@</span><br><span class="line">/-6@</span><br><span class="line">1:MAPNA&#123;y    &lt;---</span><br><span class="line">E-7@</span><br><span class="line">/-8@</span><br><span class="line">4:yS__CaR	&lt;---</span><br><span class="line">O-9@</span><br><span class="line"> #      !</span><br><span class="line">/-:@</span><br><span class="line">E-;@</span><br><span class="line">/-&lt;@</span><br><span class="line">6:d1n9!!&#125;	&lt;---</span><br><span class="line">E-=@</span><br><span class="line">Y3td</span><br><span class="line">/-&gt;@</span><br><span class="line">2:0U_sHOu 	&lt;---</span><br><span class="line">(-?@</span><br></pre></td></tr></table></figure>
+
+<p>善良的出题人还告诉了我们顺序！所以flag是<code>MAPNA&#123;y0U_sHOuLd_4lW4yS__CaR3__PaADd1n9!!&#125;</code></p>
+<h1 id="Forensics-PLC-Ⅱ"><a href="#Forensics-PLC-Ⅱ" class="headerlink" title="Forensics&#x2F;PLC Ⅱ"></a>Forensics&#x2F;PLC Ⅱ</h1><blockquote>
+<p>After extensive investigations, the MAPNA forensics team discovered that the attackers attempted to manipulate the PLC time. Please identify the precise time in the following format: year:month:day:hour:minute:second:millisecond. The flag is MAPNA{sha256(datetime)}.<br>经过广泛的调查，MACNA取证团队发现攻击者试图操纵PLC时间。请按以下格式标识精确时间：年：月：日：小时：分钟：秒：毫秒。标志为 MAPNA{sha256（datetime）}。</p>
+<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
+</blockquote>
+<p>拿到流量包发现全部都是TCP流量，显然应该就提取data数据，然后分析具体是什么协议了。</p>
+<p>题目的名字的为PLC，这意味着这是一道工控设备的流量题，通过第29条流量我们甚至可以直接发现设备的型号为：IM151-8 PN&#x2F;DP CPU，这是西门子旗下的一款设备。</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123104911593.png" alt="image-20240123104911593"></p>
+<p>循着这个思路下去就是分析这款设备如何修改时间，这里我走进了一个误区，去翻阅了这款cpu的<a href="https://cache.industry.siemens.com/dl/files/312/47409312/att_78878/v1/et200s_im151_8_pn_dp_cpu_operating_instructions_zh-CHS_zh-CHS.pdf">手册</a>找到了它”使用 PROFINET 进行时间同步”。仔细研究profinet这个协议之后我卡住了，因为它和TCP没有毛关系。</p>
+<p>事实上这个是相对底层的东西，不是很重要。（这里我也问了LLM，它也把我往这方面去引导了T^T）我们需要知道的是：</p>
+<ol>
+<li><strong>IM151-8是什么</strong>：西门子工业自动化领域的产品系列之一，属于西门子的S7-1500系列。</li>
+<li><strong>怎么使用它</strong>：STEP 7是用于编程、配置和维护SIMATIC S7控制器的软件工具。</li>
+<li><strong>工控软件的协议是什么</strong>：S7 协议是 SIEMENS S7系列产品之间通讯使用的标准协议</li>
+</ol>
+<p>因此S7协议才是这里的流量真正归属的协议。</p>
+<p>再介绍一下，来自sealldev的智慧，在他们的wp中他们截取了tcp.data起始部分<code>03000016</code>使用github的code search功能找到了相关的脚本，进而确定了协议</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/search_result_on_github0123.png" alt="image-20240123112840406"></p>
+<p>wireshark wiki在<a href="https://wiki.wireshark.org/S7comm">S7comm</a>中提到了<a href="https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_reading_setting_plc_time.pcap">设置时间的例子</a></p>
+<p>在示例中我们可以找到设置时间（set time）的43号流量，并且关注到表示设置时间的特征数值：<code>4702</code>（如图所示，4代表请求，7代表时间函数，02代表设置时间的子函数）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123122837950.png" alt="image-20240123122837950"></p>
+<p>因此我们在题目附件plc.pcap的分组字节流中进行十六进制值的搜索即可。</p>
+<p>以下是我的搜索结果：</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123123238801.png" alt="image-20240123123238801"></p>
+<p>时间戳就是<code>00202309211959599490</code>，解析结果是<code>2023:09:21:19:59:29:949</code>，依照题目要求进行sha256即可。</p>
+<h1 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h1><h2 id="S7-Timestamp"><a href="#S7-Timestamp" class="headerlink" title="S7 Timestamp"></a>S7 Timestamp</h2><p>以题目PLCⅡ中的<code>00202309211959599490</code>为例进行解析</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>含义</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0x00</td>
+<td>保留，一般为0x00</td>
+<td>00</td>
+</tr>
+<tr>
+<td>0x01</td>
+<td>年1</td>
+<td>20</td>
+</tr>
+<tr>
+<td>0x02</td>
+<td>年2</td>
+<td>23</td>
+</tr>
+<tr>
+<td>0x03</td>
+<td>月</td>
+<td>09</td>
+</tr>
+<tr>
+<td>0x04</td>
+<td>日</td>
+<td>21</td>
+</tr>
+<tr>
+<td>0x05</td>
+<td>时</td>
+<td>19</td>
+</tr>
+<tr>
+<td>0x06</td>
+<td>分</td>
+<td>59</td>
+</tr>
+<tr>
+<td>0x07</td>
+<td>秒</td>
+<td>59</td>
+</tr>
+<tr>
+<td>0x08~0x0a</td>
+<td>毫秒（逆序）</td>
+<td>0949</td>
+</tr>
+</tbody></table>
+<h2 id="相关阅读"><a href="#相关阅读" class="headerlink" title="相关阅读"></a>相关阅读</h2><ul>
+<li><a href="https://ctf.krauq.com/mapna-ctf-2024">krauq’s wp</a></li>
+<li><a href="https://seall.dev/posts/mapnactf2024#forensicsplc-ii--11-solves">seall’s wp</a></li>
+<li><a href="https://wiki.wireshark.org/S7comm">wirshark wiki-S7comm</a></li>
+</ul>
+<h2 id="小反思"><a href="#小反思" class="headerlink" title="小反思"></a>小反思</h2><ol>
+<li>对流量的特征进行搜索，最简单的方式就是截取数据头部</li>
+<li>别太相信LLM，他们鬼话太多了。</li>
+<li>匍匐在伟大的github code search之下吧！</li>
+</ol>
+]]></content>
+      <tags>
+        <tag>PLC,流量分析</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>IrisCTF2023题解</title>
+    <url>/2024/01/10/IrisCTF2023%E9%A2%98%E8%A7%A3/</url>
+    <content><![CDATA[<p>这是我加入r3之后第一次有输出的比赛，比赛难度不大，有些题目挺有新意的，记录一下我参与解决的题目。</p>
+<h1 id="OSINT"><a href="#OSINT" class="headerlink" title="OSINT"></a>OSINT</h1><h2 id="Czech-Where"><a href="#Czech-Where" class="headerlink" title="Czech Where?"></a>Czech Where?</h2><p>开局一张图，直接喂给谷歌图片搜索</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image.png" alt="image"></p>
+<p>能找到同一地点的图片，来自一篇游记<a href="http://tabiichigo.livedoor.biz/archives/51921024.html">http://tabiichigo.livedoor.biz/archives/51921024.html</a></p>
+<p>图片链接为：<a href="https://livedoor.blogimg.jp/rokitomo/imgs/4/e/4eff76c9-s.jpg">https://livedoor.blogimg.jp/rokitomo/imgs/4/e/4eff76c9-s.jpg</a></p>
+<p>地点为捷克黄金巷Zlatá ulička u Daliborky</p>
+<p>这篇<a href="https://www.bring-you.info/zh-tw/zlata-ulicka">文章</a>也可以佐证20号在黄金巷中，“黃金巷真的非常狹小，總長應該只有十來公尺，共有No.11到No.27十七間屋子”</p>
+<p>试来试去终于出了，flag是irisctf{zlata_ulicka_u_daliborky} </p>
+<p>好好好，捷克语是吧….</p>
+<h1 id="Network"><a href="#Network" class="headerlink" title="Network"></a>Network</h1><h2 id="Where’s-skat"><a href="#Where’s-skat" class="headerlink" title="Where’s skat?"></a>Where’s skat?</h2><p>这一题一开始我以为是直接分析报文中地理相关信息，于是先研究了流量包中各种协议，一些DNS协议或者DHCP协议中可以使用地域相关字段，而在本题中不存在。后来想使用IP进行定位，只能定位到山景城的IP（但后面也证明了不是那里）。</p>
+<p>Anaïs Huang师傅提出使用无线网络的SSID，根据含义明确的SSID可以有效找到大致的位置，例如</p>
+<p>Morlin &lt;&#x3D;&gt; Morlin Engineering\Morlin Guest…</p>
+<p>ABM Parking &lt;&#x3D;&gt; ABM Parking Services</p>
+<p>Mag1str师傅则使用wigle.net这个网站利用流量中的BSSID信息准确的位置Union Station</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240110170358033.png" alt="image-20240110170358033"></p>
+<p>而flag是<code>irisctf&#123;los_angeles_union_station&#125;</code></p>
+<p>另外再补充一些wlan相关知识：<a href="https://forum.huawei.com/enterprise/zh/thread/580899002067599360">https://forum.huawei.com/enterprise/zh/thread/580899002067599360</a></p>
+<h1 id="Foresics"><a href="#Foresics" class="headerlink" title="Foresics"></a>Foresics</h1><h2 id="Not-Just-Media"><a href="#Not-Just-Media" class="headerlink" title="Not Just Media"></a>Not Just Media</h2><p>使用potplayer播放该视频，在“属性”中的“媒体内嵌资源”项上我们可以发现怪东西</p>
+<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240110171444649.png" alt="image-20240110171444649" style="zoom:33%;" />
+
+<p>选中后点击“保存为其他名称”即可提取出来</p>
+<p>打开预览一下就会发现存在字符替换的情况</p>
+<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/fakefont.png" alt="image-20240110171630936" style="zoom:33%;" />
+
+<p>那么就有以下几种思路了：</p>
+<ol>
+<li>提取被替换的字符</li>
+<li>提取替换上去的字符</li>
+<li>以这个字体重新渲染某个特定的字幕。</li>
+</ol>
+<p>这一题是第三者，使用这个字体重新渲染一下mkv文件中的字幕即可。</p>
+<p>怎么渲染呢？在fontsee.com这个网站中上传字体后输入字幕的内容即可。</p>
+<p>提取字幕也可以使用potplayer，入口在“字幕”-&gt;“保存字幕”-&gt;“另存字幕为”</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/fontsee.png" alt="image-20240110172138663"></p>
+<h2 id="What-the-Beep"><a href="#What-the-Beep" class="headerlink" title="What the Beep?"></a>What the Beep?</h2><p>我愿称之为物理题。</p>
+<p>思路很开门，给了四个html文件，文件名就是经纬坐标，打开后就能看到横轴为时间纵轴为分贝的折线图。</p>
+<p>经过观察，记录数据如下：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>声强</th>
+<th>近似</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>源点</td>
+<td>140dB</td>
+<td>140dB</td>
+</tr>
+<tr>
+<td>上37.310205, -120.352005</td>
+<td>55.70~56.67dB</td>
+<td>56dB</td>
+</tr>
+<tr>
+<td>下37.185287, -120.292548</td>
+<td>49.00~49.985dB</td>
+<td>49.5</td>
+</tr>
+<tr>
+<td>左37.258453, -120.406603</td>
+<td>51.79~52.2dB</td>
+<td>52dB</td>
+</tr>
+<tr>
+<td>右37.232087, -120.262349</td>
+<td>52.04~53dB</td>
+<td>52dB</td>
+</tr>
+</tbody></table>
+<p>思路就是：利用声音衰减规律计算距离，利用四个坐标计算范围，求交点。但具体数值的计算是不便的，不如转换为比例。</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/%E5%A3%B0%E9%9F%B3%E8%A1%B0%E5%87%8F%E5%85%AC%E5%BC%8F.png" alt="声音衰减公式"></p>
+<p>由上述公式可以推出<code>r上:r下:r左:r右 = 2.2:1:1.4:1.4 </code></p>
+<p>于是用ps模个图看看大致位置。</p>
+<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/map.png" alt="map" style="zoom: 50%;" />
+
+<p>可能偏差有点大，试了好多次都不对，于是心一横写了个枚举程序。</p>
+<p>PS:我自己设置的参数爆破了好一会都没出，Crazy_Man随手一改就出来了，TQL，ORZ。</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="comment"># 左上角 37.280627, -120.325931</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 右下角 37.277058, -120.323865</span></span><br><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line">context(log_level = <span class="string">&#x27;debug&#x27;</span>,os = <span class="string">&#x27;linux&#x27;</span>)</span><br><span class="line"></span><br><span class="line">max_retries = <span class="number">3</span></span><br><span class="line">retry_delay = <span class="number">5</span>  <span class="comment"># 重试间隔时间（秒）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> x <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">7300</span>, <span class="number">7400</span>, <span class="number">20</span>):</span><br><span class="line">    <span class="keyword">for</span> y <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5300</span>, <span class="number">5900</span>, <span class="number">20</span>):</span><br><span class="line">        connected = <span class="literal">False</span></span><br><span class="line">        retries = <span class="number">0</span></span><br><span class="line">        </span><br><span class="line">        <span class="keyword">while</span> <span class="keyword">not</span> connected <span class="keyword">and</span> retries &lt; max_retries:</span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                p = remote(<span class="string">&quot;what-the-beep.chal.irisc.tf&quot;</span>, <span class="string">&quot;10500&quot;</span>, timeout=<span class="number">10</span>)  <span class="comment"># 设置连接超时时间为10秒</span></span><br><span class="line">                p.recvuntil(<span class="string">&quot;Input: &quot;</span>)</span><br><span class="line">                payload = <span class="string">f&quot;37.2<span class="subst">&#123;x&#125;</span>, -120.32<span class="subst">&#123;y&#125;</span>&quot;</span></span><br><span class="line">                p.sendline(payload.encode())</span><br><span class="line">                r = p.recv(<span class="number">1024</span>)</span><br><span class="line">                connected = <span class="literal">True</span></span><br><span class="line">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">f&quot;Connection error: <span class="subst">&#123;e&#125;</span>. Retrying in <span class="subst">&#123;retry_delay&#125;</span> seconds...&quot;</span>)</span><br><span class="line">                retries += <span class="number">1</span></span><br><span class="line">                time.sleep(retry_delay)</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">                </span><br><span class="line">        <span class="keyword">if</span> retries == max_retries:</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;Max retries reached for coordinates (<span class="subst">&#123;x&#125;</span>, <span class="subst">&#123;y&#125;</span>)&quot;</span>)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            p.close()</span><br><span class="line">            time.sleep(<span class="number">2</span>)</span><br><span class="line">            <span class="keyword">if</span> <span class="string">&quot;Not&quot;</span> <span class="keyword">not</span> <span class="keyword">in</span> r.decode():</span><br><span class="line">                <span class="built_in">print</span>(r.decode())</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">&quot;*&quot;</span>*<span class="number">20</span>)</span><br><span class="line">                p.interactive()</span><br></pre></td></tr></table></figure>
+
+<h2 id="Investigator-Alligator"><a href="#Investigator-Alligator" class="headerlink" title="Investigator Alligator"></a>Investigator Alligator</h2><p>背景故事就是机器被打了，加密了一些文件，用户还输入了一些东西。</p>
+<p>拿到的是磁盘镜像，用7z直接解压了。</p>
+<h3 id="检查用户目录"><a href="#检查用户目录" class="headerlink" title="检查用户目录"></a>检查用户目录</h3><p>在用户目录<code>\home\stephen</code>下我们发现了被加密的文件<code>encrypted.img</code>、可执行文件<code>taunt</code>和python脚本<code>rswenc.py</code></p>
+<p>简单分析tauna就是提示被PWNED了，然后让输入一些内容;rswenc.py则是和指定的服务器进行交互然后利用得到的密钥加密指定文件。</p>
+<p>根据题目描述，管理员记录了流量和内存镜像</p>
+<p>思路就很清晰了，分析流量呗</p>
+<h3 id="检查管理员目录"><a href="#检查管理员目录" class="headerlink" title="检查管理员目录"></a>检查管理员目录</h3><p>在root目录下找到.bash_history，可以确定capture下的network是受攻击时tcpdump获得的流量，使用LiME获取了内存镜像，位置为<code>\LiME\src\sample.mem</code>。</p>
+<h3 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h3><p>首先是流量分析，结合python脚本，我们筛选出<code>ip.addr == 149.28.14.135 and tcp.port == 9281</code>的流量，发现只有一条，并且数据也是明文传输的: <code>eng0jieh7ahga7eidae6taebohhaicaeraef5ahng8ohb2Tho3ahz7ojooXeixoh0thoolung7eingietai8hiechar6ahchohn6uwah2Keid5phoil7Oovool3Quai</code></p>
+<p>接下来就是编写脚本进行恢复被加密的数据了。</p>
+<p>改改<code>rswenc.py</code>的ip和端口，再写个服务端发送密钥即可。</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> socket</span><br><span class="line"></span><br><span class="line">data = <span class="string">&#x27;eng0jieh7ahga7eidae6taebohhaicaeraef5ahng8ohb2Tho3ahz7ojooXeixoh0thoolung7eingietai8hiechar6ahchohn6uwah2Keid5phoil7Oovool3Quai&#x27;</span></span><br><span class="line"><span class="comment"># 创建一个socket对象</span></span><br><span class="line">sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</span><br><span class="line"><span class="comment"># 设置超时时间（可选）</span></span><br><span class="line">sock.settimeout(<span class="number">10</span>)</span><br><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    <span class="comment"># 连接到指定的IP和端口</span></span><br><span class="line">    sock.connect((<span class="string">&#x27;127.0.0.1&#x27;</span>, <span class="number">4444</span>))</span><br><span class="line">    <span class="comment"># 发送数据</span></span><br><span class="line">    sock.sendall(data.encode())</span><br><span class="line"><span class="keyword">finally</span>:</span><br><span class="line">    <span class="comment"># 关闭连接</span></span><br><span class="line">    sock.close()</span><br></pre></td></tr></table></figure>
+
+<p>恢复出的数据用7z打开找到<code>data\super_duper_important_info.png</code></p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/super_duper_important_info.png" alt="image-20240110191740554"></p>
+<p>这是一半的flag，另一半也很容易想到就是用户输入的内容咯。</p>
+<p>十六进制查看器打开<code>sample.mem</code>很容易就能找到</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/mem.png" alt="mem"></p>
+<p>PS:在检查用户目录下的bash_history时会发现可疑文件<code>.cache/gunzip/gunzip</code>，这就是攻击者的🐎.</p>
+]]></content>
+      <tags>
+        <tag>wp</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>2024獬豸杯WP</title>
+    <url>/2024/01/29/2024%E7%8D%AC%E8%B1%B8%E6%9D%AFWP/</url>
+    <content><![CDATA[<blockquote>
+<p>附件： <a href="https://pan.baidu.com/s/1KYq_HkpPBHWCvWTzz6yzSw?pwd=xzcp">https://pan.baidu.com/s/1KYq_HkpPBHWCvWTzz6yzSw?pwd=xzcp</a><br>解压密码：都考100分</p>
+</blockquote>
+<h1 id="手机取证"><a href="#手机取证" class="headerlink" title="手机取证"></a>手机取证</h1><blockquote>
+<p>使用网络泄露的Magnet AXIOM7.8 完成所有题目</p>
+</blockquote>
+<h2 id="手机基本信息"><a href="#手机基本信息" class="headerlink" title="手机基本信息"></a>手机基本信息</h2><p> 1、IOS手机备份包是什么时候开始备份的。（标准格式：2024-01-20.12:12:12)</p>
+<p>就是解压后的文件夹名</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205228346.png" alt="image-20240128205228346"></p>
+<p>答案：<code>20240115.14:19:44</code></p>
+<p> 2、请分析，该手机共下载了几款即时通讯工具。（标准格式：阿拉伯数字）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205353733.png" alt="image-20240128205353733"></p>
+<p>在应用程序使用情况-”已安装应用“中即可看到</p>
+<p>答案：<code>3</code></p>
+<p> 3、手机机主的号码得ICCID是多少。（标准格式：阿拉伯数字）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205601738.png" alt="image-20240128205601738"></p>
+<p>答案：<code>89860320245121150689</code></p>
+<p> 4、手机机主登录小西米语音的日期是什么时候。（标准格式：20240120）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205645951.png" alt="image-20240128205645951"></p>
+<p>答案：<code>20240115</code></p>
+<h2 id="地图数据"><a href="#地图数据" class="headerlink" title="地图数据"></a>地图数据</h2><p> 5、请问嫌疑人家庭住址在哪个小区。（标准格式：松泽家园）</p>
+<p>我以为这一题是社工，因为手机里有几张带有经纬度的图片，但定位也不是什么小区。</p>
+<p>又以为是地图的截图的位置，结果也不是。</p>
+<p>toto✌的<a href="https://blog.csdn.net/jyttttttt/article/details/135893820">wp</a>里说是高德地图的搜索点：天铂华庭 。</p>
+<p>其实我觉得这题不太好。</p>
+<h2 id="浏览器"><a href="#浏览器" class="headerlink" title="浏览器"></a>浏览器</h2><p> 1、Safari浏览器书签的对应数据库名称是什么。（标准格式：sqltie.db)</p>
+<p>找到Safari的书签后点击“源”就自动调转到数据来源文件的位置</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205759155.png" alt="image-20240128205759155"></p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205853239.png" alt="image-20240128205853239"></p>
+<p>答案：<code>Bookmarks.db</code></p>
+<p> 2、手机机主计划去哪里旅游。（标准格式：苏州）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128205932495.png" alt="image-20240128205932495"></p>
+<p>答案：<code>拉萨</code></p>
+<h2 id="即时通讯"><a href="#即时通讯" class="headerlink" title="即时通讯"></a>即时通讯</h2><p>首先是通过手机的图片确定嫌疑人使用的通信软件</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128210147414.png" alt="image-20240128210147414"></p>
+<p>排除陌陌和QQ之后就只能是那个小西语音了，接下来就是找软件聊天记录</p>
+<p> 1、手机机主查询过那个人的身份信息。（标准格式：龙信）</p>
+<p>七找八找就翻到了聊天记录的数据库文件</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128210523074.png" alt="image-20240128210523074"></p>
+<p>答案：<code>龙黑</code></p>
+<p> 2、请问机主共转多少费用用于数据查询。（标准格式：1000）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128210553283.png" alt="image-20240128210553283"></p>
+<p>答案：1100</p>
+<p> 3、机主查询的信息中共有多少男性。（标准格式：阿拉伯数字）</p>
+<p>手机里还有个手机短信发来的手机号身份证信息的图，根据身份证号倒数第二位即可判断性别，男性为奇数。</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128210840751.png" alt="image-20240128210840751"></p>
+<p>需要注意的是前8个人身份证号都是全的，后面两个要么根据名字猜测一下要么瞎猜（</p>
+<p>答案：<code>4</code></p>
+<h2 id="其他有用信息"><a href="#其他有用信息" class="headerlink" title="其他有用信息"></a>其他有用信息</h2><p>在取证比赛以及实践中，证据总是交叉的，这里记录一下我们在手机中发现的可能有用的东西</p>
+<ol>
+<li>短信提示我们嫌疑人喜欢用生日做密码</li>
+</ol>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128211137437.png" alt="image-20240128211137437"></p>
+<ol start="2">
+<li>嫌疑人手机号为：+8617712681561</li>
+<li>备忘录中记录了两条像密码的信息<ol>
+<li><code>PCBL:Longxin@123</code></li>
+<li><code>0110</code></li>
+</ol>
+</li>
+</ol>
+<h1 id="计算机取证"><a href="#计算机取证" class="headerlink" title="计算机取证"></a>计算机取证</h1><blockquote>
+<p>感谢赛事组织方提供的取证大师</p>
+<p>PS：当载入检材的时候就会提示有bitlocker加密分区，结合手机中的PCBL就能猜到密码是Longxin@123</p>
+</blockquote>
+<h2 id="基本信息"><a href="#基本信息" class="headerlink" title="基本信息"></a>基本信息</h2><p> 1、计算机系统的安装日期是什么时候。（标准格式：20240120）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128211618802.png" alt="image-20240128211618802"></p>
+<p>答案：20240112</p>
+<h2 id="系统痕迹"><a href="#系统痕迹" class="headerlink" title="系统痕迹"></a>系统痕迹</h2><p> 1、请问机主最近一次访问压缩包文件得到文件名称是什么。（标准格式：1.zip）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128220125462.png" alt="image-20240128220125462"></p>
+<p>答案：<code>data.zip</code></p>
+<h2 id="数据库分析"><a href="#数据库分析" class="headerlink" title="数据库分析"></a>数据库分析</h2><p> 1、还原数据库，请分析root用户最后一次更改密码的时间是什么时候。（标准格式：2024-01-20.12:12:12)</p>
+<p>解锁Bitlocker之后挂载到本地，打开邮箱（\Program Files\Foxmail 7.2\Foxmail.exe）发现data.zip的压缩包密码</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128220405478.png" alt="image-20240128220405478"></p>
+<p>爆破，启动！</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128221755061.png" alt="image-20240128221755061"></p>
+<p>答案：<code>15566666555</code></p>
+<p> 2、请问mysql数据库中共存在多少个数据库。（标准格式：阿拉伯数字）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128231856702.png" alt="image-20240128231856702"></p>
+<p>答案：<code>5</code></p>
+<p> 3、员工编号为204200的员工总工资为多少元。（标准格式：阿拉伯数字）重建书库</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128231204535.png" alt="image-20240128231204535"></p>
+<p>答案：<code>488313</code></p>
+<p> 4、Finance部门中在1999年1月1日当天和之后入职的人员数量是多少名。（标准格式：阿拉伯数字）</p>
+<p>根据team_list表显示，Finance部门对应的dept_no是d002</p>
+<p>从hiredate中获取符合条件的雇员条目然后统计数量</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128231822810.png" alt="image-20240128231822810"></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="built_in">COUNT</span>(<span class="operator">*</span>)</span><br><span class="line"><span class="keyword">FROM</span> `hiredate`</span><br><span class="line"><span class="keyword">WHERE</span> dept_no <span class="operator">=</span> <span class="string">&#x27;d002&#x27;</span> <span class="keyword">AND</span> from_date <span class="operator">&gt;=</span> <span class="string">&#x27;1999-01-01&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>答案：<code>1486</code></p>
+<h2 id="邮箱服务器"><a href="#邮箱服务器" class="headerlink" title="邮箱服务器"></a>邮箱服务器</h2><p> 1、请问邮箱服务器的登录密码是多少。（标准格式：admin）</p>
+<p>找到<code>\hMailServer\Bin\hMailServer.INI</code>，该文件记录了密码的MD5</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128233648737.png" alt="image-20240128233648737"></p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128233623494.png" alt="image-20240128233623494"></p>
+<p>答案：<code>900110</code></p>
+<p> 2、邮件服务器中共有多少个账号。（标准格式：阿拉伯数字）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128232620315.png" alt="image-20240128232620315"></p>
+<p>答案：<code>3</code></p>
+<p> 3、邮件服务器中共有多少个域名。（标准格式：阿拉伯数字）</p>
+<blockquote>
+<p>感谢toto师傅指点迷津，我一开始还在研究重建呢。</p>
+<p>“不是什么东西都能本机还原的”——toto</p>
+</blockquote>
+<p>仿真起来之后，登录上服务器直接看就行</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240129005840420.png" alt="image-20240129005840420"></p>
+<p>答案：<code>3</code></p>
+<p> 4、请问约定见面的地点在哪里。（标准格式：太阳路668号）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128222037855.png" alt="image-20240128222037855"></p>
+<p>根据邮件，街头地点在藏在图片中</p>
+<p>答案：<code>3</code></p>
+<h1 id="apk分析"><a href="#apk分析" class="headerlink" title="apk分析"></a>apk分析</h1><blockquote>
+<p>基础题+一捏捏代码审计</p>
+<p>使用JADX-GUI完成所有题目</p>
+</blockquote>
+<p> 1、APP包名是多少。（标准格式：com.xxx.xxx）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128201659167.png" alt="image-20240128201659167"></p>
+<p>答案：<code>com.example.readeveryday</code></p>
+<p> 2、apk的主函数名是多少。（标准格式：comlongxin）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128201742843.png" alt="image-20240128201742843"></p>
+<p>答案：<code>StartShow</code></p>
+<p> 3、apk的签名算法是什么。（标准格式：xxx）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128201922327.png" alt="image-20240128201922327"></p>
+<p>答案：<code>SHA1withRSA</code> </p>
+<p>4、apk的应用版本是多少。（标准格式：1.2）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128201952113.png" alt="image-20240128201952113"></p>
+<p>答案：<code>1.0</code></p>
+<p> 5、请判断该apk是否需要联网。（标准格式：是&#x2F;否）</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202008242.png" alt="image-20240128202008242"></p>
+<p>答案：<code>是</code></p>
+<p>其实就证据而言只看到这里是不够的，结合T6也能知道。</p>
+<p> 6、APK回传地址？（标准格式：127.0.0.1:12345）</p>
+<p>正则匹配即可，模式串为：<code>[0-9]&#123;1,3&#125;\.[0-9]&#123;1,3&#125;\.[0-9]&#123;1,3&#125;\.[0-9]&#123;1,3&#125;\:</code></p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202241895.png" alt="image-20240128202241895"></p>
+<p>答案： <code>10.0.102.135:8888</code></p>
+<p>7、APK回传数据文件名称是什么。（标准格式：1.txt）</p>
+<p>顺着回传地址的代码就很容易找到以下内容，这是设置web请求头。</p>
+<p> <img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202326704.png" alt="image-20240128202326704"></p>
+<p>答案：<code>Readdata.zip</code></p>
+<p>8、APK回传数据加密密码是多少。（标准格式：admin）</p>
+<p>关键点就是找到文件如何生成的，容易想到搜索文件名<code>Readdata.zip</code>，<code>EncryFile</code>这个函数让人一眼看穿</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202513828.png" alt="image-20240128202513828"></p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202705913.png" alt="image-20240128202705913"></p>
+<p>答案：<code>19_08.05r</code></p>
+<p>9、APK发送回后台服务器的数据包含以下哪些内容？（多选）<br>A．手机通讯录B.手机短信C.相册D.GPS定位信息E.手机应用列表</p>
+<p>看函数名就知道了</p>
+<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240128202758945.png" alt="image-20240128202758945"></p>
+<p>答案：<code>ABE</code></p>
+]]></content>
+      <tags>
+        <tag>wp,forensic</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>逆向任务下大模型的简单对比</title>
     <url>/2024/01/05/%E9%80%86%E5%90%91%E4%BB%BB%E5%8A%A1%E4%B8%8B%E5%A4%A7%E6%A8%A1%E5%9E%8B%E7%9A%84%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94/</url>
     <content><![CDATA[<blockquote>
@@ -145,219 +514,5 @@
 </li>
 </ol>
 ]]></content>
-  </entry>
-  <entry>
-    <title>IrisCTF2023题解</title>
-    <url>/2024/01/10/IrisCTF2023%E9%A2%98%E8%A7%A3/</url>
-    <content><![CDATA[<p>这是我加入r3之后第一次有输出的比赛，比赛难度不大，有些题目挺有新意的，记录一下我参与解决的题目。</p>
-<h1 id="OSINT"><a href="#OSINT" class="headerlink" title="OSINT"></a>OSINT</h1><h2 id="Czech-Where"><a href="#Czech-Where" class="headerlink" title="Czech Where?"></a>Czech Where?</h2><p>开局一张图，直接喂给谷歌图片搜索</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image.png" alt="image"></p>
-<p>能找到同一地点的图片，来自一篇游记<a href="http://tabiichigo.livedoor.biz/archives/51921024.html">http://tabiichigo.livedoor.biz/archives/51921024.html</a></p>
-<p>图片链接为：<a href="https://livedoor.blogimg.jp/rokitomo/imgs/4/e/4eff76c9-s.jpg">https://livedoor.blogimg.jp/rokitomo/imgs/4/e/4eff76c9-s.jpg</a></p>
-<p>地点为捷克黄金巷Zlatá ulička u Daliborky</p>
-<p>这篇<a href="https://www.bring-you.info/zh-tw/zlata-ulicka">文章</a>也可以佐证20号在黄金巷中，“黃金巷真的非常狹小，總長應該只有十來公尺，共有No.11到No.27十七間屋子”</p>
-<p>试来试去终于出了，flag是irisctf{zlata_ulicka_u_daliborky} </p>
-<p>好好好，捷克语是吧….</p>
-<h1 id="Network"><a href="#Network" class="headerlink" title="Network"></a>Network</h1><h2 id="Where’s-skat"><a href="#Where’s-skat" class="headerlink" title="Where’s skat?"></a>Where’s skat?</h2><p>这一题一开始我以为是直接分析报文中地理相关信息，于是先研究了流量包中各种协议，一些DNS协议或者DHCP协议中可以使用地域相关字段，而在本题中不存在。后来想使用IP进行定位，只能定位到山景城的IP（但后面也证明了不是那里）。</p>
-<p>Anaïs Huang师傅提出使用无线网络的SSID，根据含义明确的SSID可以有效找到大致的位置，例如</p>
-<p>Morlin &lt;&#x3D;&gt; Morlin Engineering\Morlin Guest…</p>
-<p>ABM Parking &lt;&#x3D;&gt; ABM Parking Services</p>
-<p>Mag1str师傅则使用wigle.net这个网站利用流量中的BSSID信息准确的位置Union Station</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240110170358033.png" alt="image-20240110170358033"></p>
-<p>而flag是<code>irisctf&#123;los_angeles_union_station&#125;</code></p>
-<p>另外再补充一些wlan相关知识：<a href="https://forum.huawei.com/enterprise/zh/thread/580899002067599360">https://forum.huawei.com/enterprise/zh/thread/580899002067599360</a></p>
-<h1 id="Foresics"><a href="#Foresics" class="headerlink" title="Foresics"></a>Foresics</h1><h2 id="Not-Just-Media"><a href="#Not-Just-Media" class="headerlink" title="Not Just Media"></a>Not Just Media</h2><p>使用potplayer播放该视频，在“属性”中的“媒体内嵌资源”项上我们可以发现怪东西</p>
-<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240110171444649.png" alt="image-20240110171444649" style="zoom:33%;" />
-
-<p>选中后点击“保存为其他名称”即可提取出来</p>
-<p>打开预览一下就会发现存在字符替换的情况</p>
-<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/fakefont.png" alt="image-20240110171630936" style="zoom:33%;" />
-
-<p>那么就有以下几种思路了：</p>
-<ol>
-<li>提取被替换的字符</li>
-<li>提取替换上去的字符</li>
-<li>以这个字体重新渲染某个特定的字幕。</li>
-</ol>
-<p>这一题是第三者，使用这个字体重新渲染一下mkv文件中的字幕即可。</p>
-<p>怎么渲染呢？在fontsee.com这个网站中上传字体后输入字幕的内容即可。</p>
-<p>提取字幕也可以使用potplayer，入口在“字幕”-&gt;“保存字幕”-&gt;“另存字幕为”</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/fontsee.png" alt="image-20240110172138663"></p>
-<h2 id="What-the-Beep"><a href="#What-the-Beep" class="headerlink" title="What the Beep?"></a>What the Beep?</h2><p>我愿称之为物理题。</p>
-<p>思路很开门，给了四个html文件，文件名就是经纬坐标，打开后就能看到横轴为时间纵轴为分贝的折线图。</p>
-<p>经过观察，记录数据如下：</p>
-<table>
-<thead>
-<tr>
-<th>位置</th>
-<th>声强</th>
-<th>近似</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>源点</td>
-<td>140dB</td>
-<td>140dB</td>
-</tr>
-<tr>
-<td>上37.310205, -120.352005</td>
-<td>55.70~56.67dB</td>
-<td>56dB</td>
-</tr>
-<tr>
-<td>下37.185287, -120.292548</td>
-<td>49.00~49.985dB</td>
-<td>49.5</td>
-</tr>
-<tr>
-<td>左37.258453, -120.406603</td>
-<td>51.79~52.2dB</td>
-<td>52dB</td>
-</tr>
-<tr>
-<td>右37.232087, -120.262349</td>
-<td>52.04~53dB</td>
-<td>52dB</td>
-</tr>
-</tbody></table>
-<p>思路就是：利用声音衰减规律计算距离，利用四个坐标计算范围，求交点。但具体数值的计算是不便的，不如转换为比例。</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/%E5%A3%B0%E9%9F%B3%E8%A1%B0%E5%87%8F%E5%85%AC%E5%BC%8F.png" alt="声音衰减公式"></p>
-<p>由上述公式可以推出<code>r上:r下:r左:r右 = 2.2:1:1.4:1.4 </code></p>
-<p>于是用ps模个图看看大致位置。</p>
-<img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/map.png" alt="map" style="zoom: 50%;" />
-
-<p>可能偏差有点大，试了好多次都不对，于是心一横写了个枚举程序。</p>
-<p>PS:我自己设置的参数爆破了好一会都没出，Crazy_Man随手一改就出来了，TQL，ORZ。</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="comment"># 左上角 37.280627, -120.325931</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 右下角 37.277058, -120.323865</span></span><br><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line">context(log_level = <span class="string">&#x27;debug&#x27;</span>,os = <span class="string">&#x27;linux&#x27;</span>)</span><br><span class="line"></span><br><span class="line">max_retries = <span class="number">3</span></span><br><span class="line">retry_delay = <span class="number">5</span>  <span class="comment"># 重试间隔时间（秒）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> x <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">7300</span>, <span class="number">7400</span>, <span class="number">20</span>):</span><br><span class="line">    <span class="keyword">for</span> y <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5300</span>, <span class="number">5900</span>, <span class="number">20</span>):</span><br><span class="line">        connected = <span class="literal">False</span></span><br><span class="line">        retries = <span class="number">0</span></span><br><span class="line">        </span><br><span class="line">        <span class="keyword">while</span> <span class="keyword">not</span> connected <span class="keyword">and</span> retries &lt; max_retries:</span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                p = remote(<span class="string">&quot;what-the-beep.chal.irisc.tf&quot;</span>, <span class="string">&quot;10500&quot;</span>, timeout=<span class="number">10</span>)  <span class="comment"># 设置连接超时时间为10秒</span></span><br><span class="line">                p.recvuntil(<span class="string">&quot;Input: &quot;</span>)</span><br><span class="line">                payload = <span class="string">f&quot;37.2<span class="subst">&#123;x&#125;</span>, -120.32<span class="subst">&#123;y&#125;</span>&quot;</span></span><br><span class="line">                p.sendline(payload.encode())</span><br><span class="line">                r = p.recv(<span class="number">1024</span>)</span><br><span class="line">                connected = <span class="literal">True</span></span><br><span class="line">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">f&quot;Connection error: <span class="subst">&#123;e&#125;</span>. Retrying in <span class="subst">&#123;retry_delay&#125;</span> seconds...&quot;</span>)</span><br><span class="line">                retries += <span class="number">1</span></span><br><span class="line">                time.sleep(retry_delay)</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">                </span><br><span class="line">        <span class="keyword">if</span> retries == max_retries:</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;Max retries reached for coordinates (<span class="subst">&#123;x&#125;</span>, <span class="subst">&#123;y&#125;</span>)&quot;</span>)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            p.close()</span><br><span class="line">            time.sleep(<span class="number">2</span>)</span><br><span class="line">            <span class="keyword">if</span> <span class="string">&quot;Not&quot;</span> <span class="keyword">not</span> <span class="keyword">in</span> r.decode():</span><br><span class="line">                <span class="built_in">print</span>(r.decode())</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">&quot;*&quot;</span>*<span class="number">20</span>)</span><br><span class="line">                p.interactive()</span><br></pre></td></tr></table></figure>
-
-<h2 id="Investigator-Alligator"><a href="#Investigator-Alligator" class="headerlink" title="Investigator Alligator"></a>Investigator Alligator</h2><p>背景故事就是机器被打了，加密了一些文件，用户还输入了一些东西。</p>
-<p>拿到的是磁盘镜像，用7z直接解压了。</p>
-<h3 id="检查用户目录"><a href="#检查用户目录" class="headerlink" title="检查用户目录"></a>检查用户目录</h3><p>在用户目录<code>\home\stephen</code>下我们发现了被加密的文件<code>encrypted.img</code>、可执行文件<code>taunt</code>和python脚本<code>rswenc.py</code></p>
-<p>简单分析tauna就是提示被PWNED了，然后让输入一些内容;rswenc.py则是和指定的服务器进行交互然后利用得到的密钥加密指定文件。</p>
-<p>根据题目描述，管理员记录了流量和内存镜像</p>
-<p>思路就很清晰了，分析流量呗</p>
-<h3 id="检查管理员目录"><a href="#检查管理员目录" class="headerlink" title="检查管理员目录"></a>检查管理员目录</h3><p>在root目录下找到.bash_history，可以确定capture下的network是受攻击时tcpdump获得的流量，使用LiME获取了内存镜像，位置为<code>\LiME\src\sample.mem</code>。</p>
-<h3 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h3><p>首先是流量分析，结合python脚本，我们筛选出<code>ip.addr == 149.28.14.135 and tcp.port == 9281</code>的流量，发现只有一条，并且数据也是明文传输的: <code>eng0jieh7ahga7eidae6taebohhaicaeraef5ahng8ohb2Tho3ahz7ojooXeixoh0thoolung7eingietai8hiechar6ahchohn6uwah2Keid5phoil7Oovool3Quai</code></p>
-<p>接下来就是编写脚本进行恢复被加密的数据了。</p>
-<p>改改<code>rswenc.py</code>的ip和端口，再写个服务端发送密钥即可。</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> socket</span><br><span class="line"></span><br><span class="line">data = <span class="string">&#x27;eng0jieh7ahga7eidae6taebohhaicaeraef5ahng8ohb2Tho3ahz7ojooXeixoh0thoolung7eingietai8hiechar6ahchohn6uwah2Keid5phoil7Oovool3Quai&#x27;</span></span><br><span class="line"><span class="comment"># 创建一个socket对象</span></span><br><span class="line">sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</span><br><span class="line"><span class="comment"># 设置超时时间（可选）</span></span><br><span class="line">sock.settimeout(<span class="number">10</span>)</span><br><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    <span class="comment"># 连接到指定的IP和端口</span></span><br><span class="line">    sock.connect((<span class="string">&#x27;127.0.0.1&#x27;</span>, <span class="number">4444</span>))</span><br><span class="line">    <span class="comment"># 发送数据</span></span><br><span class="line">    sock.sendall(data.encode())</span><br><span class="line"><span class="keyword">finally</span>:</span><br><span class="line">    <span class="comment"># 关闭连接</span></span><br><span class="line">    sock.close()</span><br></pre></td></tr></table></figure>
-
-<p>恢复出的数据用7z打开找到<code>data\super_duper_important_info.png</code></p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/super_duper_important_info.png" alt="image-20240110191740554"></p>
-<p>这是一半的flag，另一半也很容易想到就是用户输入的内容咯。</p>
-<p>十六进制查看器打开<code>sample.mem</code>很容易就能找到</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/mem.png" alt="mem"></p>
-<p>PS:在检查用户目录下的bash_history时会发现可疑文件<code>.cache/gunzip/gunzip</code>，这就是攻击者的🐎.</p>
-]]></content>
-      <tags>
-        <tag>wp</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>记MapnaCTF2024的两题PLC流量</title>
-    <url>/2024/01/23/%E8%AE%B0MapnaCTF2024%E7%9A%84%E4%B8%A4%E9%A2%98PLC%E6%B5%81%E9%87%8F/</url>
-    <content><![CDATA[<p>这是一篇赛后复现的文章，做题的时候犯了一些错误，仅作记录警醒自己。</p>
-<h1 id="Forensics-PLC-I"><a href="#Forensics-PLC-I" class="headerlink" title="Forensics&#x2F;PLC I"></a>Forensics&#x2F;PLC I</h1><blockquote>
-<p>The MAPNA CERT team has identified an intrusion into the plant’s PLCs, discovering a covert message transferred to the PLC. Can you uncover this secret message?<br>MAPNA CERT 团队发现了对工厂 PLC 的入侵，发现了传输到 PLC 的秘密消息。你能揭开这个秘密信息吗？</p>
-<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
-</blockquote>
-<p>随手翻就能看到一些奇怪的，连续的，可读的字符串。</p>
-<p>掏出神奇的string,你会得到：</p>
-<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&gt;&gt;&gt;strings plc.pcap              </span><br><span class="line">4-&quot;@</span><br><span class="line">(-#@</span><br><span class="line">&gt;-$@</span><br><span class="line">A-%@</span><br><span class="line">/-&amp;@</span><br><span class="line">I-&#x27;@</span><br><span class="line">/-(@</span><br><span class="line">I-)@</span><br><span class="line">/-*@</span><br><span class="line">I-+@</span><br><span class="line">/-,@</span><br><span class="line">I--@</span><br><span class="line">3:Ld_4lW4 &lt;---</span><br><span class="line">6ES7 151-8AB01-0AB0 </span><br><span class="line">/-.@</span><br><span class="line">E-/@</span><br><span class="line">/-0@</span><br><span class="line">I-1@</span><br><span class="line">/-2@</span><br><span class="line">I-3@</span><br><span class="line">IM151-8 PN/DP CPU</span><br><span class="line">/-4@</span><br><span class="line">5:3__PaAD	&lt;---</span><br><span class="line">E-5@</span><br><span class="line">/-6@</span><br><span class="line">1:MAPNA&#123;y    &lt;---</span><br><span class="line">E-7@</span><br><span class="line">/-8@</span><br><span class="line">4:yS__CaR	&lt;---</span><br><span class="line">O-9@</span><br><span class="line"> #      !</span><br><span class="line">/-:@</span><br><span class="line">E-;@</span><br><span class="line">/-&lt;@</span><br><span class="line">6:d1n9!!&#125;	&lt;---</span><br><span class="line">E-=@</span><br><span class="line">Y3td</span><br><span class="line">/-&gt;@</span><br><span class="line">2:0U_sHOu 	&lt;---</span><br><span class="line">(-?@</span><br></pre></td></tr></table></figure>
-
-<p>善良的出题人还告诉了我们顺序！所以flag是<code>MAPNA&#123;y0U_sHOuLd_4lW4yS__CaR3__PaADd1n9!!&#125;</code></p>
-<h1 id="Forensics-PLC-Ⅱ"><a href="#Forensics-PLC-Ⅱ" class="headerlink" title="Forensics&#x2F;PLC Ⅱ"></a>Forensics&#x2F;PLC Ⅱ</h1><blockquote>
-<p>After extensive investigations, the MAPNA forensics team discovered that the attackers attempted to manipulate the PLC time. Please identify the precise time in the following format: year:month:day:hour:minute:second:millisecond. The flag is MAPNA{sha256(datetime)}.<br>经过广泛的调查，MACNA取证团队发现攻击者试图操纵PLC时间。请按以下格式标识精确时间：年：月：日：小时：分钟：秒：毫秒。标志为 MAPNA{sha256（datetime）}。</p>
-<p><strong>Files:</strong> <a href="https://web.archive.org/web/20240121173821/https://mapnactf.com/tasks/PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz">PLC_0829b4ef9780677086043add8592e996f21e0bbe.txz</a></p>
-</blockquote>
-<p>拿到流量包发现全部都是TCP流量，显然应该就提取data数据，然后分析具体是什么协议了。</p>
-<p>题目的名字的为PLC，这意味着这是一道工控设备的流量题，通过第29条流量我们甚至可以直接发现设备的型号为：IM151-8 PN&#x2F;DP CPU，这是西门子旗下的一款设备。</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123104911593.png" alt="image-20240123104911593"></p>
-<p>循着这个思路下去就是分析这款设备如何修改时间，这里我走进了一个误区，去翻阅了这款cpu的<a href="https://cache.industry.siemens.com/dl/files/312/47409312/att_78878/v1/et200s_im151_8_pn_dp_cpu_operating_instructions_zh-CHS_zh-CHS.pdf">手册</a>找到了它”使用 PROFINET 进行时间同步”。仔细研究profinet这个协议之后我卡住了，因为它和TCP没有毛关系。</p>
-<p>事实上这个是相对底层的东西，不是很重要。（这里我也问了LLM，它也把我往这方面去引导了T^T）我们需要知道的是：</p>
-<ol>
-<li><strong>IM151-8是什么</strong>：西门子工业自动化领域的产品系列之一，属于西门子的S7-1500系列。</li>
-<li><strong>怎么使用它</strong>：STEP 7是用于编程、配置和维护SIMATIC S7控制器的软件工具。</li>
-<li><strong>工控软件的协议是什么</strong>：S7 协议是 SIEMENS S7系列产品之间通讯使用的标准协议</li>
-</ol>
-<p>因此S7协议才是这里的流量真正归属的协议。</p>
-<p>再介绍一下，来自sealldev的智慧，在他们的wp中他们截取了tcp.data起始部分<code>03000016</code>使用github的code search功能找到了相关的脚本，进而确定了协议</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/search_result_on_github0123.png" alt="image-20240123112840406"></p>
-<p>wireshark wiki在<a href="https://wiki.wireshark.org/S7comm">S7comm</a>中提到了<a href="https://wiki.wireshark.org/uploads/__moin_import__/attachments/SampleCaptures/s7comm_reading_setting_plc_time.pcap">设置时间的例子</a></p>
-<p>在示例中我们可以找到设置时间（set time）的43号流量，并且关注到表示设置时间的特征数值：<code>4702</code>（如图所示，4代表请求，7代表时间函数，02代表设置时间的子函数）</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123122837950.png" alt="image-20240123122837950"></p>
-<p>因此我们在题目附件plc.pcap的分组字节流中进行十六进制值的搜索即可。</p>
-<p>以下是我的搜索结果：</p>
-<p><img src="https://raw.githubusercontent.com/silence-forest-sf/pic-bed/master/img/image-20240123123238801.png" alt="image-20240123123238801"></p>
-<p>时间戳就是<code>00202309211959599490</code>，解析结果是<code>2023:09:21:19:59:29:949</code>，依照题目要求进行sha256即可。</p>
-<h1 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h1><h2 id="S7-Timestamp"><a href="#S7-Timestamp" class="headerlink" title="S7 Timestamp"></a>S7 Timestamp</h2><p>以题目PLCⅡ中的<code>00202309211959599490</code>为例进行解析</p>
-<table>
-<thead>
-<tr>
-<th>位置</th>
-<th>含义</th>
-<th>示例</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>0x00</td>
-<td>保留，一般为0x00</td>
-<td>00</td>
-</tr>
-<tr>
-<td>0x01</td>
-<td>年1</td>
-<td>20</td>
-</tr>
-<tr>
-<td>0x02</td>
-<td>年2</td>
-<td>23</td>
-</tr>
-<tr>
-<td>0x03</td>
-<td>月</td>
-<td>09</td>
-</tr>
-<tr>
-<td>0x04</td>
-<td>日</td>
-<td>21</td>
-</tr>
-<tr>
-<td>0x05</td>
-<td>时</td>
-<td>19</td>
-</tr>
-<tr>
-<td>0x06</td>
-<td>分</td>
-<td>59</td>
-</tr>
-<tr>
-<td>0x07</td>
-<td>秒</td>
-<td>59</td>
-</tr>
-<tr>
-<td>0x08~0x0a</td>
-<td>毫秒（逆序）</td>
-<td>0949</td>
-</tr>
-</tbody></table>
-<h2 id="相关阅读"><a href="#相关阅读" class="headerlink" title="相关阅读"></a>相关阅读</h2><ul>
-<li><a href="https://ctf.krauq.com/mapna-ctf-2024">krauq’s wp</a></li>
-<li><a href="https://seall.dev/posts/mapnactf2024#forensicsplc-ii--11-solves">seall’s wp</a></li>
-<li><a href="https://wiki.wireshark.org/S7comm">wirshark wiki-S7comm</a></li>
-</ul>
-<h2 id="小反思"><a href="#小反思" class="headerlink" title="小反思"></a>小反思</h2><ol>
-<li>对流量的特征进行搜索，最简单的方式就是截取数据头部</li>
-<li>别太相信LLM，他们鬼话太多了。</li>
-<li>匍匐在伟大的github code search之下吧！</li>
-</ol>
-]]></content>
-      <tags>
-        <tag>PLC,流量分析</tag>
-      </tags>
   </entry>
 </search>
