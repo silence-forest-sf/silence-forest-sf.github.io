@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
+  <follow_challenge>
+    <feedId>104491769656028160</feedId>
+    <userId>82592766797529088</userId>
+</follow_challenge>
   <title>F0rest&#39;s forest</title>
   
   
